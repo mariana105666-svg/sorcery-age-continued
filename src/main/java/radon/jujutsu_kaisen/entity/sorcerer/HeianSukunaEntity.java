@@ -1,0 +1,152 @@
+package radon.jujutsu_kaisen.entity.sorcerer;
+
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier.Builder;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ItemLike;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.EntityHitResult;
+import org.jetbrains.annotations.NotNull;
+import radon.jujutsu_kaisen.ability.JJKAbilities;
+import radon.jujutsu_kaisen.ability.base.Ability;
+import radon.jujutsu_kaisen.capability.data.sorcerer.SorcererGrade;
+import radon.jujutsu_kaisen.capability.data.sorcerer.Trait;
+import radon.jujutsu_kaisen.entity.JJKEntities;
+import radon.jujutsu_kaisen.item.JJKItems;
+import radon.jujutsu_kaisen.util.RotationUtil;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.animation.AnimatableManager.ControllerRegistrar;
+import software.bernie.geckolib.core.object.PlayState;
+
+public class HeianSukunaEntity extends SukunaEntity {
+   private static final EntityDataAccessor<Boolean> DATA_IDLE = SynchedEntityData.defineId(HeianSukunaEntity.class, EntityDataSerializers.BOOLEAN);
+   private static final EntityDataAccessor<Integer> DATA_BARRAGE = SynchedEntityData.defineId(HeianSukunaEntity.class, EntityDataSerializers.INT);
+   private static final RawAnimation WALK = RawAnimation.begin().thenLoop("move.walk");
+   private static final RawAnimation RUN = RawAnimation.begin().thenLoop("move.run");
+   private static final RawAnimation SWING = RawAnimation.begin().thenPlay("attack.swing");
+   private static final RawAnimation BARRAGE = RawAnimation.begin().thenLoop("attack.barrage");
+   private static final RawAnimation SIT = RawAnimation.begin().thenPlayAndHold("misc.sit");
+
+   public HeianSukunaEntity(EntityType<? extends PathfinderMob> pType, Level pLevel) {
+      super(pType, pLevel);
+   }
+
+   public HeianSukunaEntity(Level pLevel, int fingers) {
+      super((EntityType<? extends PathfinderMob>)JJKEntities.HEIAN_SUKUNA.get(), pLevel);
+      this.fingers = fingers;
+   }
+
+   public void setBarrage(int barrage) {
+      this.entityData.set(DATA_BARRAGE, barrage);
+   }
+
+   @Override
+   public float getExperience() {
+      return SorcererGrade.SPECIAL_GRADE.getRequiredExperience() * 3.5F;
+   }
+
+   public static Builder createAttributes() {
+      return createMobAttributes()
+         .add(Attributes.ATTACK_DAMAGE)
+         .add(Attributes.FOLLOW_RANGE, 140.0)
+         .add(Attributes.ARMOR_TOUGHNESS, 20.0)
+         .add(Attributes.ARMOR, 40.0);
+   }
+
+   @Override
+   public float getStepHeight() {
+      return 5.0F;
+   }
+
+   @Override
+   protected void defineSynchedData() {
+      super.defineSynchedData();
+      this.entityData.define(DATA_IDLE, false);
+      this.entityData.define(DATA_BARRAGE, 0);
+   }
+
+   @Override
+   public void onAddedToWorld() {
+      super.onAddedToWorld();
+      this.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack((ItemLike)JJKItems.HITEN_STAFF.get()));
+      this.setItemInHand(InteractionHand.OFF_HAND, new ItemStack((ItemLike)JJKItems.KAMUTOKE_DAGGER.get()));
+   }
+
+   @Override
+   protected void customServerAiStep() {
+      super.customServerAiStep();
+      this.entityData.set(DATA_IDLE, this.getTarget() == null && this.getDeltaMovement().lengthSqr() < 9.01);
+      int barrage = (Integer)this.entityData.get(DATA_BARRAGE);
+      if (barrage > 0) {
+         this.entityData.set(DATA_BARRAGE, --barrage);
+      }
+
+      if (this.random.nextInt(100) == 0) {
+         LivingEntity target = this.getTarget();
+         if (target != null) {
+            this.startUsingItem(InteractionHand.OFF_HAND);
+            if (RotationUtil.getLookAtHit(this, 60.0) instanceof EntityHitResult hit && hit.getEntity() == target) {
+               this.stopUsingItem();
+            }
+         }
+      }
+   }
+
+   private PlayState walkRunSitPredicate(AnimationState<HeianSukunaEntity> animationState) {
+      if (animationState.isMoving()) {
+         return animationState.setAndContinue(this.isSprinting() ? RUN : WALK);
+      } else {
+         return this.entityData.get(DATA_IDLE) ? animationState.setAndContinue(SIT) : PlayState.STOP;
+      }
+   }
+
+   private PlayState swingPredicate(AnimationState<HeianSukunaEntity> animationState) {
+      if ((Integer)this.entityData.get(DATA_BARRAGE) > 0) {
+         return animationState.setAndContinue(BARRAGE);
+      } else if (this.swinging) {
+         return animationState.setAndContinue(SWING);
+      } else {
+         animationState.getController().forceAnimationReset();
+         return PlayState.STOP;
+      }
+   }
+
+   @Override
+   public void registerControllers(ControllerRegistrar controllerRegistrar) {
+      controllerRegistrar.add(new AnimationController[]{new AnimationController(this, "Walk/Run/Sit", this::walkRunSitPredicate)});
+      controllerRegistrar.add(new AnimationController[]{new AnimationController(this, "Swing", this::swingPredicate)});
+   }
+
+   @Override
+   public List<Ability> getUnlocked() {
+      return List.of(
+         (Ability)JJKAbilities.HOLLOW_WICKER_BASKET.get(),
+         (Ability)JJKAbilities.MALEVOLENT_SHRINE.get(),
+         (Ability)JJKAbilities.DOMAIN_AMPLIFICATION.get(),
+         (Ability)JJKAbilities.RCT1.get(),
+         (Ability)JJKAbilities.RCT2.get(),
+         (Ability)JJKAbilities.RCT3.get(),
+         (Ability)JJKAbilities.DASH.get(),
+         (Ability)JJKAbilities.FIRE_ARROW.get()
+      );
+   }
+
+   @NotNull
+   @Override
+   public List<Trait> getTraits() {
+      List<Trait> traits = new ArrayList<>(super.getTraits());
+      traits.add(Trait.PERFECT_BODY);
+      return traits;
+   }
+}

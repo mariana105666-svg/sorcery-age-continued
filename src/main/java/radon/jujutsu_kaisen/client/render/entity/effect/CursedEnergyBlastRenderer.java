@@ -1,0 +1,61 @@
+package radon.jujutsu_kaisen.client.render.entity.effect;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.client.renderer.entity.EntityRendererProvider.Context;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.LivingEntity;
+import org.jetbrains.annotations.NotNull;
+import org.joml.Vector3f;
+import radon.jujutsu_kaisen.client.JJKRenderTypes;
+import radon.jujutsu_kaisen.client.model.entity.CursedEnergyBlastModel;
+import radon.jujutsu_kaisen.client.particle.ParticleColors;
+import radon.jujutsu_kaisen.entity.effect.CursedEnergyBlastEntity;
+
+public class CursedEnergyBlastRenderer extends EntityRenderer<CursedEnergyBlastEntity> {
+   private static final ResourceLocation TEXTURE = new ResourceLocation("jujutsu_kaisen", "textures/entity/cursed_energy_blast.png");
+   private final CursedEnergyBlastModel model;
+
+   public CursedEnergyBlastRenderer(Context pContext) {
+      super(pContext);
+      this.model = new CursedEnergyBlastModel(pContext.bakeLayer(CursedEnergyBlastModel.LAYER));
+   }
+
+   public void render(
+      CursedEnergyBlastEntity pEntity,
+      float pEntityYaw,
+      float pPartialTick,
+      @NotNull PoseStack pPoseStack,
+      @NotNull MultiBufferSource pBuffer,
+      int pPackedLight
+   ) {
+      if (pEntity.getOwner() instanceof LivingEntity owner) {
+         Vector3f var14 = ParticleColors.getCursedEnergyColor(owner);
+         float age = pEntity.getTime() + pPartialTick;
+         float fraction = age / 25.0F;
+         float opacity = (float)Math.max((1.0 - Math.pow(fraction, 4.0)) * 0.4F, 1.0E-5F);
+         pPoseStack.pushPose();
+         float yaw = Mth.lerp(pPartialTick, pEntity.yRotO, pEntity.getYRot());
+         pPoseStack.mulPose(Axis.YP.rotationDegrees(yaw));
+         VertexConsumer consumer = pBuffer.getBuffer(JJKRenderTypes.energy(this.getTextureLocation(pEntity)));
+         this.model.setupAnim(pEntity, 0.0F, 0.0F, age, 0.0F, 0.0F);
+         this.model.renderToBuffer(pPoseStack, consumer, pPackedLight, OverlayTexture.NO_OVERLAY, var14.x, var14.y, var14.z, opacity);
+         pPoseStack.popPose();
+      }
+   }
+
+   protected int getBlockLightLevel(@NotNull CursedEnergyBlastEntity pEntity, @NotNull BlockPos pPos) {
+      return 15;
+   }
+
+   @NotNull
+   public ResourceLocation getTextureLocation(@NotNull CursedEnergyBlastEntity pEntity) {
+      return TEXTURE;
+   }
+}

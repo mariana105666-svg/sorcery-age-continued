@@ -1,0 +1,33 @@
+package radon.jujutsu_kaisen.client.render.entity.sorcerer;
+
+import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
+import net.minecraft.client.renderer.entity.EntityRendererProvider.Context;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.NotNull;
+import radon.jujutsu_kaisen.client.layer.JJKOverlayLayer;
+import radon.jujutsu_kaisen.client.model.entity.AoiTodoModel;
+import radon.jujutsu_kaisen.entity.sorcerer.AoiTodoEntity;
+
+public class AoiTodoRenderer extends HumanoidMobRenderer<AoiTodoEntity, AoiTodoModel> {
+   private static final ResourceLocation TEXTURE = new ResourceLocation("jujutsu_kaisen", "textures/entity/aoi_todo.png");
+
+   public AoiTodoRenderer(Context pContext) {
+      super(pContext, new AoiTodoModel(pContext.bakeLayer(AoiTodoModel.LAYER)), 0.5F);
+      this.addLayer(
+         new HumanoidArmorLayer(
+            this,
+            new HumanoidModel(pContext.bakeLayer(AoiTodoModel.INNER_LAYER)),
+            new HumanoidModel(pContext.bakeLayer(AoiTodoModel.OUTER_LAYER)),
+            pContext.getModelManager()
+         )
+      );
+      this.addLayer(new JJKOverlayLayer(this));
+   }
+
+   @NotNull
+   public ResourceLocation getTextureLocation(@NotNull AoiTodoEntity pEntity) {
+      return TEXTURE;
+   }
+}

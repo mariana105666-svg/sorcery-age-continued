@@ -1,0 +1,20 @@
+package radon.jujutsu_kaisen.entity;
+
+import java.util.Optional;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.syncher.EntityDataSerializer;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.registries.DeferredRegister;
+import net.minecraftforge.registries.RegistryObject;
+import net.minecraftforge.registries.ForgeRegistries.Keys;
+
+public class JJKEntityDataSerializers {
+   public static DeferredRegister<EntityDataSerializer<?>> ENTITY_DATA_SERIALIZERS = DeferredRegister.create(Keys.ENTITY_DATA_SERIALIZERS, "jujutsu_kaisen");
+   public static RegistryObject<EntityDataSerializer<Optional<ResourceLocation>>> OPTIONAL_RESOURCE_LOCATION = ENTITY_DATA_SERIALIZERS.register(
+      "optional_resource_location", () -> EntityDataSerializer.optional(FriendlyByteBuf::writeResourceLocation, FriendlyByteBuf::readResourceLocation)
+   );
+   public static RegistryObject<EntityDataSerializer<Optional<CompoundTag>>> OPTIONAL_COMPOUND_TAG = ENTITY_DATA_SERIALIZERS.register(
+      "optional_compound_tag", () -> EntityDataSerializer.optional(FriendlyByteBuf::writeNbt, FriendlyByteBuf::readNbt)
+   );
+}

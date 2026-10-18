@@ -1,0 +1,104 @@
+package radon.jujutsu_kaisen.ability;
+
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.common.MinecraftForge;
+import radon.jujutsu_kaisen.VeilHandler;
+import radon.jujutsu_kaisen.ability.base.Ability;
+import radon.jujutsu_kaisen.block.entity.IDomainBarrier;
+import radon.jujutsu_kaisen.capability.data.sorcerer.ISorcererData;
+import radon.jujutsu_kaisen.capability.data.sorcerer.SorcererDataHandler;
+import radon.jujutsu_kaisen.entity.base.DomainExpansionEntity;
+
+public class AbilityHandler {
+   public static void untrigger(LivingEntity owner, Ability ability) {
+      owner.getCapability(SorcererDataHandler.INSTANCE).ifPresent(cap -> {
+         if (ability.getActivationType(owner) == Ability.ActivationType.TOGGLED) {
+            if (cap.hasToggled(ability)) {
+               cap.toggle(ability);
+            }
+         } else if (ability.getActivationType(owner) == Ability.ActivationType.DOMAIN) {
+            if (owner instanceof Player player) {
+               if (cap.hasToggled(ability)) {
+                  cap.toggle(ability);
+               }
+
+               return;
+            }
+
+            boolean enemyDomain = false;
+            if (owner.level().isClientSide) {
+               return;
+            }
+
+            for (IDomainBarrier domain : VeilHandler.getDomainBarriers((ServerLevel)owner.level(), owner.blockPosition())) {
+               for (DomainExpansionEntity d : domain.getClashers()) {
+                  if (d.getOwner() != owner) {
+                     enemyDomain = true;
+                  }
+               }
+            }
+
+            if (cap.hasToggled(ability) && !enemyDomain) {
+               cap.toggle(ability);
+            }
+         } else if (ability.getActivationType(owner) == Ability.ActivationType.CHANNELED && cap.isChanneling(ability)) {
+            cap.channel(ability);
+         }
+      });
+   }
+
+   public static Ability.Status trigger(LivingEntity owner, Ability ability) {
+      ISorcererData cap = (ISorcererData)owner.getCapability(SorcererDataHandler.INSTANCE).resolve().orElse(null);
+      if (cap == null) {
+         return Ability.Status.FAILURE;
+      } else {
+         Ability.Status status = ability.isTriggerable(owner);
+         if (ability.getActivationType(owner) == Ability.ActivationType.INSTANT) {
+            if (status == Ability.Status.SUCCESS) {
+               ability.charge(owner);
+               ability.addDuration(owner);
+               MinecraftForge.EVENT_BUS.post(new AbilityTriggerEvent.Pre(owner, ability));
+               ability.run(owner);
+               MinecraftForge.EVENT_BUS.post(new AbilityTriggerEvent.Post(owner, ability));
+            }
+         } else {
+            if (ability.getActivationType(owner) == Ability.ActivationType.TOGGLED) {
+               if (status == Ability.Status.SUCCESS || status == Ability.Status.ENERGY && ability instanceof Ability.IAttack) {
+                  ability.addDuration(owner);
+                  MinecraftForge.EVENT_BUS.post(new AbilityTriggerEvent.Pre(owner, ability));
+                  cap.toggle(ability);
+                  MinecraftForge.EVENT_BUS.post(new AbilityTriggerEvent.Post(owner, ability));
+               }
+
+               return status;
+            }
+
+            if (ability.getActivationType(owner) == Ability.ActivationType.DOMAIN) {
+               if (status == Ability.Status.SUCCESS || status == Ability.Status.ENERGY && ability instanceof Ability.IAttack) {
+                  ability.addDuration(owner);
+                  MinecraftForge.EVENT_BUS.post(new AbilityTriggerEvent.Pre(owner, ability));
+                  cap.toggle(ability);
+                  MinecraftForge.EVENT_BUS.post(new AbilityTriggerEvent.Post(owner, ability));
+               }
+
+               return status;
+            }
+
+            if (ability.getActivationType(owner) == Ability.ActivationType.CHANNELED) {
+               if (status == Ability.Status.SUCCESS || status == Ability.Status.ENERGY && ability instanceof Ability.IAttack) {
+                  ability.addDuration(owner);
+                  MinecraftForge.EVENT_BUS.post(new AbilityTriggerEvent.Pre(owner, ability));
+                  cap.channel(ability);
+                  MinecraftForge.EVENT_BUS.post(new AbilityTriggerEvent.Post(owner, ability));
+               }
+
+               return status;
+            }
+         }
+
+         return status;
+      }
+   }
+}

@@ -1,0 +1,107 @@
+package radon.jujutsu_kaisen;
+
+import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.ModList;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig.Type;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import radon.jujutsu_kaisen.ability.JJKAbilities;
+import radon.jujutsu_kaisen.block.JJKBlocks;
+import radon.jujutsu_kaisen.block.entity.JJKBlockEntities;
+import radon.jujutsu_kaisen.block.fluid.JJKFluidTypes;
+import radon.jujutsu_kaisen.block.fluid.JJKFluids;
+import radon.jujutsu_kaisen.client.gui.screen.AltarScreen;
+import radon.jujutsu_kaisen.client.gui.screen.BountyScreen;
+import radon.jujutsu_kaisen.client.gui.screen.VeilRodScreen;
+import radon.jujutsu_kaisen.client.particle.JJKParticles;
+import radon.jujutsu_kaisen.client.render.item.armor.BlindfoldRenderer;
+import radon.jujutsu_kaisen.client.render.item.armor.InventoryCurseRenderer;
+import radon.jujutsu_kaisen.compat.CuffedCompat;
+import radon.jujutsu_kaisen.compat.PlayerReviveCompat;
+import radon.jujutsu_kaisen.config.ConfigHolder;
+import radon.jujutsu_kaisen.effect.JJKEffects;
+import radon.jujutsu_kaisen.entity.JJKEntities;
+import radon.jujutsu_kaisen.entity.JJKEntityDataSerializers;
+import radon.jujutsu_kaisen.item.JJKCreativeTabs;
+import radon.jujutsu_kaisen.item.JJKItems;
+import radon.jujutsu_kaisen.item.JJKRecipeSerializers;
+import radon.jujutsu_kaisen.menu.JJKMenus;
+import radon.jujutsu_kaisen.network.PacketHandler;
+import radon.jujutsu_kaisen.sound.JJKSounds;
+import radon.jujutsu_kaisen.world.gen.biome.modifier.JJKBiomeModifiers;
+import radon.jujutsu_kaisen.world.gen.loot.JJKLootModifiers;
+import radon.jujutsu_kaisen.world.gen.processor.JJKProcessors;
+import top.theillusivec4.curios.api.client.CuriosRendererRegistry;
+
+@Mod("jujutsu_kaisen")
+public class JujutsuKaisen {
+   public static final String MOD_ID = "jujutsu_kaisen";
+   public static final String CURIOS_MOD_ID = "curios";
+   public static final String PLAYER_REVIVE = "playerrevive";
+   public static final String CUFFED = "cuffed";
+   public static boolean PlayerReviveInstalled = false;
+   public static boolean CuffedInstalled = false;
+
+   public JujutsuKaisen() {
+      IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
+      ModLoadingContext ctx = ModLoadingContext.get();
+      ctx.registerConfig(Type.SERVER, ConfigHolder.SERVER_SPEC);
+      ctx.registerConfig(Type.CLIENT, ConfigHolder.CLIENT_SPEC);
+      JJKAbilities.ABILITIES.register(bus);
+      JJKEntities.ENTITIES.register(bus);
+      JJKEntityDataSerializers.ENTITY_DATA_SERIALIZERS.register(bus);
+      JJKParticles.PARTICLES.register(bus);
+      JJKMenus.MENUS.register(bus);
+      JJKBlocks.BLOCKS.register(bus);
+      JJKFluids.FLUIDS.register(bus);
+      JJKFluidTypes.FLUID_TYPES.register(bus);
+      JJKBlockEntities.BLOCK_ENTITIES.register(bus);
+      JJKEffects.EFFECTS.register(bus);
+      JJKItems.ITEMS.register(bus);
+      JJKRecipeSerializers.RECIPE_SERIALIZERS.register(bus);
+      JJKSounds.SOUNDS.register(bus);
+      JJKProcessors.PROCESSORS.register(bus);
+      JJKBiomeModifiers.BIOME_MODIFIERS.register(bus);
+      JJKLootModifiers.LOOT_MODIFIERS.register(bus);
+      JJKCreativeTabs.CREATIVE_MODE_TABS.register(bus);
+      bus.addListener(JujutsuKaisen::onCommonSetup);
+      bus.addListener(JujutsuKaisen::onClientSetup);
+      if (ModList.get().isLoaded("playerrevive")) {
+         PlayerReviveInstalled = true;
+         PlayerReviveCompat.load();
+      }
+
+      if (ModList.get().isLoaded("cuffed")) {
+         CuffedInstalled = true;
+         CuffedCompat.load();
+      }
+   }
+
+   public static void onCommonSetup(FMLCommonSetupEvent event) {
+      PacketHandler.register();
+   }
+
+   public static void onClientSetup(FMLClientSetupEvent event) {
+      MenuScreens.register((MenuType)JJKMenus.ALTAR.get(), AltarScreen::new);
+      MenuScreens.register((MenuType)JJKMenus.VEIL_ROD.get(), VeilRodScreen::new);
+      MenuScreens.register((MenuType)JJKMenus.BOUNTY.get(), BountyScreen::new);
+      ItemBlockRenderTypes.setRenderLayer((Fluid)JJKFluids.FAKE_WATER_SOURCE.get(), RenderType.translucent());
+      ItemBlockRenderTypes.setRenderLayer((Block)JJKBlocks.SHINING_SEA_OF_FLOWERS_FLOOR.get(), RenderType.cutout());
+      ItemBlockRenderTypes.setRenderLayer((Block)JJKBlocks.SHINING_SEA_OF_FLOWERS_DECORATION_ONE.get(), RenderType.cutout());
+      ItemBlockRenderTypes.setRenderLayer((Block)JJKBlocks.SHINING_SEA_OF_FLOWERS_DECORATION_TWO.get(), RenderType.cutout());
+      ItemBlockRenderTypes.setRenderLayer((Block)JJKBlocks.SHINING_SEA_OF_FLOWERS_DECORATION_THREE.get(), RenderType.cutout());
+      ItemBlockRenderTypes.setRenderLayer((Block)JJKBlocks.SHINING_SEA_OF_FLOWERS_DECORATION_FOUR.get(), RenderType.cutout());
+      CuriosRendererRegistry.register((Item)JJKItems.INVENTORY_CURSE.get(), InventoryCurseRenderer::new);
+      CuriosRendererRegistry.register((Item)JJKItems.BLINDFOLD.get(), BlindfoldRenderer::new);
+   }
+}

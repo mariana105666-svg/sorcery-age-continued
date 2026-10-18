@@ -1,0 +1,339 @@
+package radon.jujutsu_kaisen;
+
+import com.mojang.datafixers.util.Pair;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectListIterator;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.ProtectionEnchantment;
+import net.minecraft.world.level.EntityBasedExplosionDamageCalculator;
+import net.minecraft.world.level.Explosion;
+import net.minecraft.world.level.ExplosionDamageCalculator;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BaseFireBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.storage.loot.LootParams.Builder;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.event.ForgeEventFactory;
+import net.minecraftforge.event.TickEvent.LevelTickEvent;
+import net.minecraftforge.event.TickEvent.Phase;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.LogicalSide;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber.Bus;
+import org.jetbrains.annotations.Nullable;
+import radon.jujutsu_kaisen.ability.JJKAbilities;
+import radon.jujutsu_kaisen.ability.base.Ability;
+import radon.jujutsu_kaisen.capability.data.sorcerer.ISorcererData;
+import radon.jujutsu_kaisen.capability.data.sorcerer.SorcererDataHandler;
+import radon.jujutsu_kaisen.damage.JJKDamageSources;
+import radon.jujutsu_kaisen.network.PacketHandler;
+import radon.jujutsu_kaisen.network.packet.s2c.CameraShakeS2CPacket;
+import radon.jujutsu_kaisen.util.HelperMethods;
+import radon.jujutsu_kaisen.util.ParticleUtil;
+
+@EventBusSubscriber(
+   modid = "jujutsu_kaisen",
+   bus = Bus.FORGE
+)
+public class ExplosionHandler {
+   private static final List<ExplosionHandler.ExplosionData> explosions = new CopyOnWriteArrayList<>();
+
+   private static void addBlockDrops(ObjectArrayList<Pair<ItemStack, BlockPos>> pDropPositionArray, ItemStack pStack, BlockPos pPos) {
+      int i = pDropPositionArray.size();
+
+      for (int j = 0; j < i; j++) {
+         Pair<ItemStack, BlockPos> pair = (Pair<ItemStack, BlockPos>)pDropPositionArray.get(j);
+         ItemStack stack = (ItemStack)pair.getFirst();
+         if (ItemEntity.areMergable(stack, pStack)) {
+            ItemStack merged = ItemEntity.merge(stack, pStack, 16);
+            pDropPositionArray.set(j, Pair.of(merged, (BlockPos)pair.getSecond()));
+            if (pStack.isEmpty()) {
+               return;
+            }
+         }
+      }
+
+      pDropPositionArray.add(Pair.of(pStack, pPos));
+   }
+
+   public static float getDamage(ExplosionHandler.ExplosionData explosion, double d10) {
+      return (int)((d10 * d10 + d10) / 2.0 * 7.0 * explosion.radius + 1.0) * explosion.damage;
+   }
+
+   public static float getDamage(ExplosionHandler.ExplosionData explosion) {
+      return getDamage(explosion, 1.0);
+   }
+
+   @SubscribeEvent
+   public static void onLevelTick(LevelTickEvent event) {
+      if (event.phase != Phase.START && event.side != LogicalSide.CLIENT) {
+         List<ExplosionHandler.ExplosionData> remove = new ArrayList<>();
+
+         for (ExplosionHandler.ExplosionData explosion : explosions) {
+            if (event.level.dimension() != explosion.dimension) {
+               return;
+            }
+
+            float diameter = explosion.radius * 2.0F;
+            Explosion current = new Explosion(event.level, explosion.instigator, 0.0, 0.0, 0.0, 0.0F, List.of());
+            if (explosion.age == 0) {
+               event.level
+                  .playSound(
+                     null,
+                     explosion.position.x,
+                     explosion.position.y,
+                     explosion.position.z,
+                     SoundEvents.GENERIC_EXPLODE,
+                     SoundSource.BLOCKS,
+                     diameter,
+                     1.0F
+                  );
+               AABB bounds = new AABB(
+                  explosion.position.x - diameter,
+                  explosion.position.y - diameter,
+                  explosion.position.z - diameter,
+                  explosion.position.x + diameter,
+                  explosion.position.y + diameter,
+                  explosion.position.z + diameter
+               );
+
+               for (ServerPlayer player : event.level.getEntitiesOfClass(ServerPlayer.class, bounds)) {
+                  PacketHandler.sendToClient(new CameraShakeS2CPacket(1.0F, 5.0F, explosion.duration), player);
+               }
+
+               List<Entity> entities = event.level
+                  .getEntities(
+                     null,
+                     new AABB(
+                        Mth.floor(explosion.position.x - diameter - 1.0),
+                        Mth.floor(explosion.position.y - diameter - 1.0),
+                        Mth.floor(explosion.position.z - diameter - 1.0),
+                        Mth.floor(explosion.position.x + diameter + 1.0),
+                        Mth.floor(explosion.position.y + diameter + 1.0),
+                        Mth.floor(explosion.position.z + diameter + 1.0)
+                     )
+                  );
+               ForgeEventFactory.onExplosionDetonate(event.level, current, entities, diameter);
+
+               for (Entity entity : entities) {
+                  if (explosion.instigator.getCapability(SorcererDataHandler.INSTANCE).isPresent()) {
+                     ISorcererData cap = (ISorcererData)explosion.instigator.getCapability(SorcererDataHandler.INSTANCE).resolve().orElseThrow();
+                     if (!(explosion.source instanceof JJKDamageSources.JujutsuDamageSource)
+                        && entity == explosion.instigator
+                        && (!cap.hasSelfHit() || explosion.isMelee)) {
+                        continue;
+                     }
+                  }
+
+                  if (!entity.ignoreExplosion()) {
+                     double d12 = Math.sqrt(entity.distanceToSqr(explosion.position)) / diameter;
+                     if (d12 <= 1.0) {
+                        double d5 = entity.getX() - explosion.position.x;
+                        double d7 = (entity instanceof PrimedTnt ? entity.getY() : entity.getEyeY()) - explosion.position.y;
+                        double d9 = entity.getZ() - explosion.position.z;
+                        double d13 = Math.sqrt(d5 * d5 + d7 * d7 + d9 * d9);
+                        if (d13 != 0.0) {
+                           d5 /= d13;
+                           d7 /= d13;
+                           d9 /= d13;
+                           double d14 = Explosion.getSeenPercent(explosion.position, entity);
+                           double d10 = (1.0 - d12) * d14;
+                           entity.hurt(explosion.source, getDamage(explosion, d10));
+                           double d11;
+                           if (entity instanceof LivingEntity living) {
+                              d11 = ProtectionEnchantment.getExplosionKnockbackAfterDampener(living, d10);
+                           } else {
+                              d11 = d10;
+                           }
+
+                           d5 *= d11;
+                           d7 *= d11;
+                           d9 *= d11;
+                           Vec3 vec31 = new Vec3(d5, d7, d9);
+                           entity.setDeltaMovement(entity.getDeltaMovement().add(vec31));
+                        }
+                     }
+                  }
+               }
+            }
+
+            if (explosion.instigator instanceof Player || event.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+               ObjectArrayList<Pair<ItemStack, BlockPos>> drops = new ObjectArrayList();
+               float radius = Math.min(explosion.radius, explosion.radius * (0.5F + (float)explosion.age / explosion.duration));
+               int minX = Mth.floor(explosion.position.x - radius - 1.0);
+               int maxX = Mth.floor(explosion.position.x + radius + 1.0);
+               int minY = Mth.floor(explosion.position.y - radius - 1.0);
+               int maxY = Mth.floor(explosion.position.y + radius + 1.0);
+               int minZ = Mth.floor(explosion.position.z - radius - 1.0);
+               int maxZ = Mth.floor(explosion.position.z + radius + 1.0);
+
+               for (int x = minX; x <= maxX; x++) {
+                  for (int y = minY; y <= maxY; y++) {
+                     for (int z = minZ; z <= maxZ; z++) {
+                        double distance = (x - explosion.position.x) * (x - explosion.position.x)
+                           + (y - explosion.position.y) * (y - explosion.position.y)
+                           + (z - explosion.position.z) * (z - explosion.position.z);
+                        if (distance <= radius * radius) {
+                           BlockPos pos = new BlockPos(x, y, z);
+                           Vec3 center = pos.getCenter();
+                           if (HelperMethods.isDestroyable(event.level, explosion.instigator, pos, explosion.source, getDamage(explosion))) {
+                              BlockState block = event.level.getBlockState(pos);
+                              FluidState fluid = event.level.getFluidState(pos);
+                              float f = explosion.radius * 2.0F * (0.7F + HelperMethods.RANDOM.nextFloat() * 0.6F);
+                              Optional<Float> optional = explosion.calculator.getBlockExplosionResistance(current, event.level, pos, block, fluid);
+                              if (optional.isPresent()) {
+                                 f -= (optional.get() + 0.3F) * 0.3F;
+                              }
+
+                              if (f > 0.0F && explosion.calculator.shouldBlockExplode(current, event.level, pos, block, f) && !block.isAir()) {
+                                 BlockPos imm = pos.immutable();
+                                 if (block.canDropFromExplosion(event.level, pos, current)) {
+                                    BlockEntity be = block.hasBlockEntity() ? event.level.getBlockEntity(pos) : null;
+                                    Builder params = new Builder((ServerLevel)event.level)
+                                       .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(pos))
+                                       .withParameter(LootContextParams.TOOL, ItemStack.EMPTY)
+                                       .withOptionalParameter(LootContextParams.BLOCK_ENTITY, be)
+                                       .withOptionalParameter(LootContextParams.THIS_ENTITY, explosion.instigator)
+                                       .withParameter(LootContextParams.EXPLOSION_RADIUS, explosion.radius);
+                                    if (!JJKAbilities.hasToggled(explosion.instigator, (Ability)JJKAbilities.CURSED_ENERGY_FLOW.get())) {
+                                       block.spawnAfterBreak((ServerLevel)event.level, pos, ItemStack.EMPTY, explosion.instigator instanceof Player);
+
+                                       for (ItemStack stack : block.getDrops(params)) {
+                                          addBlockDrops(drops, stack, imm);
+                                       }
+                                    }
+                                 }
+
+                                 block.onBlockExploded(event.level, pos, current);
+                                 if (HelperMethods.RANDOM.nextInt(10) == 0) {
+                                    ParticleUtil.sendParticles((ServerLevel)event.level, ParticleTypes.EXPLOSION, true, x, y, z, 0.0, 0.0, 0.0);
+                                 }
+
+                                 if (explosion.fire
+                                    && HelperMethods.RANDOM.nextInt(3) == 0
+                                    && event.level.getBlockState(pos).isAir()
+                                    && event.level.getBlockState(pos.below()).isSolidRender(event.level, pos.below())) {
+                                    event.level.setBlockAndUpdate(pos, BaseFireBlock.getState(event.level, pos));
+                                 }
+                              }
+                           }
+                        }
+                     }
+                  }
+               }
+
+               ObjectListIterator var44 = drops.iterator();
+
+               while (var44.hasNext()) {
+                  Pair<ItemStack, BlockPos> pair = (Pair<ItemStack, BlockPos>)var44.next();
+                  Block.popResource(event.level, (BlockPos)pair.getSecond(), (ItemStack)pair.getFirst());
+               }
+            }
+
+            explosion.age++;
+            if (explosion.age >= explosion.duration) {
+               remove.add(explosion);
+            }
+         }
+
+         explosions.removeAll(remove);
+      }
+   }
+
+   public static void spawn(
+      ResourceKey<Level> dimension, Vec3 position, float radius, int duration, @Nullable LivingEntity instigator, DamageSource source, boolean causesFire
+   ) {
+      explosions.add(new ExplosionHandler.ExplosionData(dimension, position, radius, duration, 1.0F, instigator, source, causesFire, false));
+   }
+
+   public static void spawn(
+      ResourceKey<Level> dimension,
+      Vec3 position,
+      float radius,
+      int duration,
+      float damage,
+      @Nullable LivingEntity instigator,
+      DamageSource source,
+      boolean causesFire
+   ) {
+      explosions.add(new ExplosionHandler.ExplosionData(dimension, position, radius, duration, damage / 1.5F, instigator, source, causesFire, false));
+   }
+
+   public static void spawn(
+      ResourceKey<Level> dimension,
+      Vec3 position,
+      float radius,
+      int duration,
+      float damage,
+      @Nullable LivingEntity instigator,
+      DamageSource source,
+      boolean causesFire,
+      boolean isMelee
+   ) {
+      explosions.add(new ExplosionHandler.ExplosionData(dimension, position, radius, duration, damage / 1.5F, instigator, source, causesFire, isMelee));
+   }
+
+   private static class ExplosionData {
+      private final ExplosionDamageCalculator calculator;
+      private final ResourceKey<Level> dimension;
+      private final Vec3 position;
+      private final float radius;
+      private final int duration;
+      private final float damage;
+      private int age;
+      @Nullable
+      private final LivingEntity instigator;
+      private final DamageSource source;
+      private final boolean fire;
+      private final boolean isMelee;
+
+      public ExplosionData(
+         ResourceKey<Level> dimension,
+         Vec3 position,
+         float radius,
+         int duration,
+         float damage,
+         @Nullable LivingEntity instigator,
+         DamageSource source,
+         boolean fire,
+         boolean isMelee
+      ) {
+         this.calculator = (ExplosionDamageCalculator)(instigator == null
+            ? new ExplosionDamageCalculator()
+            : new EntityBasedExplosionDamageCalculator(instigator));
+         this.dimension = dimension;
+         this.position = position;
+         this.radius = radius;
+         this.duration = duration;
+         this.damage = damage;
+         this.instigator = instigator;
+         this.source = source;
+         this.fire = fire;
+         this.isMelee = isMelee;
+      }
+   }
+}

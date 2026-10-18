@@ -1,0 +1,64 @@
+package radon.jujutsu_kaisen.entity.idle_transfiguration.base;
+
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier.Builder;
+import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.NotNull;
+import radon.jujutsu_kaisen.entity.sorcerer.base.SorcererEntity;
+import radon.jujutsu_kaisen.util.HelperMethods;
+
+public abstract class TransfiguredSoulVariantEntity extends TransfiguredSoulEntity {
+   public static final EntityDataAccessor<Integer> DATA_VARIANT = SynchedEntityData.defineId(
+      TransfiguredSoulVariantEntity.class, EntityDataSerializers.INT
+   );
+
+   protected TransfiguredSoulVariantEntity(EntityType<? extends TamableAnimal> pType, Level pLevel) {
+      super(pType, pLevel);
+   }
+
+   public TransfiguredSoulVariantEntity(EntityType<? extends TamableAnimal> pType, LivingEntity owner) {
+      super(pType, owner);
+      this.setVariant(HelperMethods.randomEnum(TransfiguredSoulEntity.Variant.class));
+   }
+
+   public static Builder createAttributes() {
+      return SorcererEntity.createAttributes()
+         .add(Attributes.MAX_HEALTH, 7.0)
+         .add(Attributes.ARMOR, 12.0)
+         .add(Attributes.ARMOR_TOUGHNESS, 6.0)
+         .add(Attributes.ATTACK_DAMAGE, 6.0);
+   }
+
+   @Override
+   protected void defineSynchedData() {
+      super.defineSynchedData();
+      this.entityData.define(DATA_VARIANT, TransfiguredSoulEntity.Variant.ONE.ordinal());
+   }
+
+   public TransfiguredSoulEntity.Variant getVariant() {
+      return TransfiguredSoulEntity.Variant.values()[this.entityData.get(DATA_VARIANT)];
+   }
+
+   private void setVariant(TransfiguredSoulEntity.Variant variant) {
+      this.entityData.set(DATA_VARIANT, variant.ordinal());
+   }
+
+   @Override
+   public void addAdditionalSaveData(@NotNull CompoundTag pCompound) {
+      super.addAdditionalSaveData(pCompound);
+      pCompound.putInt("variant", this.getVariant().ordinal());
+   }
+
+   @Override
+   public void readAdditionalSaveData(@NotNull CompoundTag pCompound) {
+      super.readAdditionalSaveData(pCompound);
+      this.setVariant(TransfiguredSoulEntity.Variant.values()[pCompound.getInt("variant")]);
+   }
+}

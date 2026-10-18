@@ -1,0 +1,19 @@
+package radon.jujutsu_kaisen.client.render.entity.curse;
+
+import net.minecraft.client.renderer.entity.EntityRendererProvider.Context;
+import net.minecraft.resources.ResourceLocation;
+import radon.jujutsu_kaisen.client.layer.DinoCurseEyesLayer;
+import radon.jujutsu_kaisen.client.layer.DinoCurseFoliageLayer;
+import radon.jujutsu_kaisen.client.layer.DinoCurseTeethLayer;
+import radon.jujutsu_kaisen.client.model.base.DefaultedTurnHeadEntityGeoModel;
+import radon.jujutsu_kaisen.entity.curse.DinoCurseEntity;
+import software.bernie.geckolib.renderer.GeoEntityRenderer;
+
+public class DinoCurseRenderer extends GeoEntityRenderer<DinoCurseEntity> {
+   public DinoCurseRenderer(Context renderManager) {
+      super(renderManager, new DefaultedTurnHeadEntityGeoModel(new ResourceLocation("jujutsu_kaisen", "dino_curse")));
+      this.addRenderLayer(new DinoCurseEyesLayer(this));
+      this.addRenderLayer(new DinoCurseTeethLayer(this));
+      this.addRenderLayer(new DinoCurseFoliageLayer(this));
+   }
+}

@@ -1,0 +1,78 @@
+package radon.jujutsu_kaisen.capability.data.ten_shadows;
+
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
+import radon.jujutsu_kaisen.ability.JJKAbilities;
+import radon.jujutsu_kaisen.ability.base.Ability;
+
+public class Adaptation {
+   private final ResourceLocation key;
+   @Nullable
+   private Ability ability;
+
+   public Adaptation(ResourceLocation key) {
+      this.key = key;
+   }
+
+   public Adaptation(ResourceLocation key, @Nullable Ability ability) {
+      this(key);
+      this.ability = ability;
+   }
+
+   public Adaptation(CompoundTag nbt) {
+      this.key = new ResourceLocation(nbt.getString("ability"));
+      if (nbt.contains("technique")) {
+         this.ability = JJKAbilities.getValue(new ResourceLocation(nbt.getString("technique")));
+      }
+   }
+
+   public ResourceLocation getKey() {
+      return this.key;
+   }
+
+   @Nullable
+   public Ability getAbility() {
+      return this.ability;
+   }
+
+   public CompoundTag serializeNBT() {
+      CompoundTag nbt = new CompoundTag();
+      nbt.putString("ability", this.key.toString());
+      if (this.ability != null) {
+         nbt.putString("technique", JJKAbilities.getKey(this.ability).toString());
+      }
+
+      return nbt;
+   }
+
+   @Override
+   public boolean equals(Object obj) {
+      if (!(obj instanceof Adaptation other)) {
+         return false;
+      } else if (this.ability != null && other.ability != null) {
+         Ability.Classification first = this.ability.getClassification();
+         Ability.Classification second = other.ability.getClassification();
+         return this.ability == other.ability || first != Ability.Classification.NONE && first == second;
+      } else {
+         return this.key == other.key;
+      }
+   }
+
+   @Override
+   public int hashCode() {
+      int prime = 31;
+      int result = 1;
+      if (this.ability != null) {
+         Ability.Classification classification = this.ability.getClassification();
+         result = 31 * result + (classification == Ability.Classification.NONE ? this.ability.hashCode() : classification.hashCode());
+      }
+
+      return 31 * result + this.key.hashCode();
+   }
+
+   public static enum Type {
+      DAMAGE,
+      COUNTER;
+   }
+}

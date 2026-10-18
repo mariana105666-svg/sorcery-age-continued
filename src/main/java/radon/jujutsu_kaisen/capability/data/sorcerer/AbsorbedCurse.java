@@ -1,0 +1,75 @@
+package radon.jujutsu_kaisen.capability.data.sorcerer;
+
+import com.mojang.authlib.GameProfile;
+import java.util.UUID;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Component.Serializer;
+import net.minecraft.world.entity.EntityType;
+import org.jetbrains.annotations.Nullable;
+
+public class AbsorbedCurse {
+   private final Component name;
+   private final EntityType<?> type;
+   private final CompoundTag data;
+   private final UUID uuid;
+   @Nullable
+   private GameProfile profile;
+
+   public AbsorbedCurse(Component name, EntityType<?> type, CompoundTag data) {
+      this.name = name;
+      this.type = type;
+      this.data = data;
+      this.uuid = UUID.randomUUID();
+   }
+
+   public AbsorbedCurse(Component name, EntityType<?> type, CompoundTag data, @Nullable GameProfile profile) {
+      this(name, type, data);
+      this.profile = profile;
+   }
+
+   public AbsorbedCurse(CompoundTag nbt) {
+      this.uuid = nbt.contains("UUID") ? nbt.getUUID("UUID") : UUID.randomUUID();
+      this.name = Serializer.fromJson(nbt.getString("name"));
+      this.type = (EntityType<?>)EntityType.byString(nbt.getString("type")).orElseThrow();
+      this.data = nbt.getCompound("data");
+      if (nbt.contains("profile")) {
+         this.profile = NbtUtils.readGameProfile(nbt.getCompound("profile"));
+      }
+   }
+
+   public UUID getUUID() {
+      return this.uuid;
+   }
+
+   public Component getName() {
+      return this.name;
+   }
+
+   public EntityType<?> getType() {
+      return this.type;
+   }
+
+   public CompoundTag getData() {
+      return this.data;
+   }
+
+   @Nullable
+   public GameProfile getProfile() {
+      return this.profile;
+   }
+
+   public CompoundTag serializeNBT() {
+      CompoundTag nbt = new CompoundTag();
+      nbt.putUUID("UUID", this.uuid);
+      nbt.putString("name", Serializer.toJson(this.name));
+      nbt.putString("type", EntityType.getKey(this.type).toString());
+      nbt.put("data", this.data);
+      if (this.profile != null) {
+         nbt.put("profile", NbtUtils.writeGameProfile(new CompoundTag(), this.profile));
+      }
+
+      return nbt;
+   }
+}

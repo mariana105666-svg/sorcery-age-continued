@@ -1,0 +1,21 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All-Rights-Reserved"
+[[mods]]
+modId="jujutsu_kaisen"
+version="1.0.0"
+displayName="Jujutsu Kaisen"
+authors="ShrimpyCoding"
+description='''credits to WoodMan and Radon for making this mod possible. This mod is a continuation.'''
+[[dependencies.jujutsu_kaisen]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.jujutsu_kaisen]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"

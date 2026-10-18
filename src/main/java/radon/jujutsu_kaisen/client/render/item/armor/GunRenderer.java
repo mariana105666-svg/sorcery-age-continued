@@ -1,0 +1,12 @@
+package radon.jujutsu_kaisen.client.render.item.armor;
+
+import net.minecraft.resources.ResourceLocation;
+import radon.jujutsu_kaisen.item.armor.ArmBladeItem;
+import software.bernie.geckolib.model.DefaultedItemGeoModel;
+import software.bernie.geckolib.renderer.GeoArmorRenderer;
+
+public class GunRenderer extends GeoArmorRenderer<ArmBladeItem> {
+   public GunRenderer() {
+      super(new DefaultedItemGeoModel(new ResourceLocation("jujutsu_kaisen", "armor/gun")));
+   }
+}

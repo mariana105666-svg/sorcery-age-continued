@@ -1,0 +1,104 @@
+package radon.jujutsu_kaisen.entity.ten_shadows;
+
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier.Builder;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import radon.jujutsu_kaisen.ability.JJKAbilities;
+import radon.jujutsu_kaisen.ability.base.Summon;
+import radon.jujutsu_kaisen.entity.JJKEntities;
+import radon.jujutsu_kaisen.entity.sorcerer.base.SorcererEntity;
+import radon.jujutsu_kaisen.entity.ten_shadows.base.TenShadowsSummon;
+import radon.jujutsu_kaisen.util.RotationUtil;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.animation.AnimatableManager.ControllerRegistrar;
+import software.bernie.geckolib.core.object.PlayState;
+
+public class DivineDogTotalityEntity extends TenShadowsSummon {
+   private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("misc.idle");
+   private static final RawAnimation WALK = RawAnimation.begin().thenLoop("move.walk");
+   private static final RawAnimation RUN = RawAnimation.begin().thenLoop("move.run");
+   private static final RawAnimation SWING = RawAnimation.begin().thenPlay("attack.swing");
+
+   public DivineDogTotalityEntity(EntityType<? extends TamableAnimal> pType, Level pLevel) {
+      super(pType, pLevel);
+   }
+
+   @Override
+   protected boolean isCustom() {
+      return false;
+   }
+
+   @Override
+   protected boolean canFly() {
+      return false;
+   }
+
+   @Override
+   public boolean canChant() {
+      return false;
+   }
+
+   @Override
+   public boolean hasMeleeAttack() {
+      return true;
+   }
+
+   @Override
+   public boolean hasArms() {
+      return true;
+   }
+
+   @Override
+   public boolean canJump() {
+      return true;
+   }
+
+   public DivineDogTotalityEntity(LivingEntity owner) {
+      super((EntityType<? extends TamableAnimal>)JJKEntities.DIVINE_DOG_TOTALITY.get(), owner.level());
+      this.setTame(true);
+      this.setOwner(owner);
+      Vec3 direction = RotationUtil.calculateViewVector(0.0F, owner.getYRot());
+      Vec3 pos = owner.position().subtract(direction.multiply(this.getBbWidth(), 0.0, this.getBbWidth()));
+      this.moveTo(pos.x, pos.y, pos.z, owner.getYRot(), owner.getXRot());
+      this.yHeadRot = this.getYRot();
+      this.yHeadRotO = this.yHeadRot;
+   }
+
+   public static Builder createAttributes() {
+      return SorcererEntity.createAttributes()
+         .add(Attributes.MOVEMENT_SPEED, 0.43890000000000007)
+         .add(Attributes.MAX_HEALTH, 48.0)
+         .add(Attributes.ARMOR, 14.0)
+         .add(Attributes.ATTACK_DAMAGE, 12.5);
+   }
+
+   private PlayState walkRunIdlePredicate(AnimationState<DivineDogTotalityEntity> animationState) {
+      return animationState.isMoving() ? animationState.setAndContinue(this.isSprinting() ? RUN : WALK) : animationState.setAndContinue(IDLE);
+   }
+
+   private PlayState swingPredicate(AnimationState<DivineDogTotalityEntity> animationState) {
+      if (this.swinging) {
+         return animationState.setAndContinue(SWING);
+      } else {
+         animationState.getController().forceAnimationReset();
+         return PlayState.STOP;
+      }
+   }
+
+   @Override
+   public void registerControllers(ControllerRegistrar controllerRegistrar) {
+      controllerRegistrar.add(new AnimationController[]{new AnimationController(this, "Walk/Run/Idle", this::walkRunIdlePredicate)});
+      controllerRegistrar.add(new AnimationController[]{new AnimationController(this, "Swing", this::swingPredicate)});
+   }
+
+   @Override
+   public Summon<?> getAbility() {
+      return (Summon<?>)JJKAbilities.DIVINE_DOG_TOTALITY.get();
+   }
+}

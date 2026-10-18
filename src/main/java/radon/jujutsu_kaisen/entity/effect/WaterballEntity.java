@@ -1,0 +1,166 @@
+package radon.jujutsu_kaisen.entity.effect;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import radon.jujutsu_kaisen.ability.JJKAbilities;
+import radon.jujutsu_kaisen.ability.base.Ability;
+import radon.jujutsu_kaisen.block.FakeWaterDurationBlock;
+import radon.jujutsu_kaisen.block.JJKBlocks;
+import radon.jujutsu_kaisen.block.entity.DurationBlockEntity;
+import radon.jujutsu_kaisen.capability.data.sorcerer.ISorcererData;
+import radon.jujutsu_kaisen.capability.data.sorcerer.SorcererDataHandler;
+import radon.jujutsu_kaisen.damage.JJKDamageSources;
+import radon.jujutsu_kaisen.entity.JJKEntities;
+import radon.jujutsu_kaisen.entity.projectile.base.JujutsuProjectile;
+import radon.jujutsu_kaisen.util.EntityUtil;
+import radon.jujutsu_kaisen.util.HelperMethods;
+import radon.jujutsu_kaisen.util.RotationUtil;
+import software.bernie.geckolib.animatable.GeoEntity;
+import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.animation.AnimatableManager.ControllerRegistrar;
+import software.bernie.geckolib.util.GeckoLibUtil;
+
+public class WaterballEntity extends JujutsuProjectile implements GeoEntity {
+   private static final RawAnimation SPIN = RawAnimation.begin().thenLoop("misc.spin");
+   private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
+   private static final int DURATION = 15;
+   private static final int INTERVAL = 5;
+   private static final int WIDTH = 30;
+   private static final int HEIGHT = 10;
+   private static final float DAMAGE = 13.0F;
+
+   public WaterballEntity(EntityType<? extends Projectile> pType, Level pLevel) {
+      super(pType, pLevel);
+   }
+
+   public WaterballEntity(LivingEntity owner, float power) {
+      super((EntityType<? extends Projectile>)JJKEntities.WATERBALL.get(), owner.level(), owner, power);
+      Vec3 look = RotationUtil.getTargetAdjustedLookAngle(owner);
+      EntityUtil.offset(this, look, new Vec3(owner.getX(), owner.getEyeY() - this.getBbHeight() / 2.0F, owner.getZ()).add(look));
+   }
+
+   private static boolean isInside(LivingEntity owner, BlockPos pos) {
+      BlockPos center = owner.blockPosition();
+      BlockPos relative = pos.subtract(center);
+      return relative.getY() <= 10 && relative.distSqr(Vec3i.ZERO) < 900.0;
+   }
+
+   private void createWave(LivingEntity owner) {
+      ISorcererData cap = (ISorcererData)owner.getCapability(SorcererDataHandler.INSTANCE).resolve().orElseThrow();
+      BlockPos center = owner.blockPosition();
+      owner.level()
+         .playSound(
+            null,
+            this.getX(),
+            this.getY(),
+            this.getZ(),
+            SoundEvents.PLAYER_SPLASH_HIGH_SPEED,
+            SoundSource.MASTER,
+            0.5F,
+            0.7F + (HelperMethods.RANDOM.nextFloat() - 0.5F) * 0.8F
+         );
+      owner.level()
+         .playSound(
+            null,
+            this.getX(),
+            this.getY(),
+            this.getZ(),
+            SoundEvents.CONDUIT_DEACTIVATE,
+            SoundSource.MASTER,
+            1.0F,
+            1.0F + (HelperMethods.RANDOM.nextFloat() - 0.5F) * 0.3F
+         );
+
+      for (Entity entity : owner.level().getEntities(owner, AABB.ofSize(owner.position(), 30.0, 10.0, 30.0))) {
+         if (isInside(owner, entity.blockPosition())
+            && entity.hurt(JJKDamageSources.indirectJujutsuAttack(this, owner, (Ability)JJKAbilities.DISASTER_TIDES.get()), 13.0F * this.getPower())) {
+            entity.setDeltaMovement(entity.position().subtract(center.getCenter()));
+            entity.invulnerableTime = 0;
+         }
+      }
+
+      for (int i = 0; i < 30; i++) {
+         int horizontal = i;
+         int duration = (i + 1) / 3;
+         cap.delayTickEvent(() -> {
+            for (int j = -10; j < 10; j++) {
+               for (int x = -horizontal; x <= horizontal; x++) {
+                  for (int z = -horizontal; z <= horizontal; z++) {
+                     double distance = Math.sqrt(x * x + -j * -j + z * z);
+                     if (distance <= horizontal && distance >= horizontal - 1) {
+                        BlockPos pos = center.offset(x, j, z);
+                        if (pos != center) {
+                           BlockState state = owner.level().getBlockState(pos);
+                           if (state.isAir() && !state.canOcclude()) {
+                              owner.level().setBlockAndUpdate(pos, ((FakeWaterDurationBlock)JJKBlocks.FAKE_WATER_DURATION.get()).defaultBlockState());
+                              if (owner.level().getBlockEntity(pos) instanceof DurationBlockEntity be) {
+                                 be.create(duration, state);
+                              }
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }, i);
+      }
+   }
+
+   @Override
+   public void tick() {
+      super.tick();
+      if (this.getOwner() instanceof LivingEntity owner) {
+         if (this.getTime() == 1) {
+            owner.level().playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.CONDUIT_ACTIVATE, SoundSource.MASTER, 8.0F, 3.0F);
+            owner.level().playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.HOSTILE_SPLASH, SoundSource.MASTER, 1.0F, 1.0F);
+         }
+
+         if (this.getTime() <= 15) {
+            if (!owner.isAlive()) {
+               this.discard();
+            } else {
+               if (this.getTime() % 5 == 0) {
+                  owner.swing(InteractionHand.MAIN_HAND);
+               }
+
+               if (!this.level().isClientSide && this.getTime() % 5 == 0) {
+                  this.createWave(owner);
+               }
+
+               Vec3 look = RotationUtil.getTargetAdjustedLookAngle(owner);
+               Vec3 spawn = new Vec3(owner.getX(), owner.getEyeY() - this.getBbHeight() / 2.0F, owner.getZ()).add(look);
+               this.setPos(spawn.x, spawn.y, spawn.z);
+               double d0 = look.horizontalDistance();
+               this.setYRot((float)(Mth.atan2(look.x, look.z) * 180.0F / (float)Math.PI));
+               this.setXRot((float)(Mth.atan2(look.y, d0) * 180.0F / (float)Math.PI));
+               this.yRotO = this.getYRot();
+               this.xRotO = this.getXRot();
+            }
+         } else {
+            this.discard();
+         }
+      }
+   }
+
+   public void registerControllers(ControllerRegistrar controllerRegistrar) {
+      controllerRegistrar.add(new AnimationController[]{new AnimationController(this, "Spin", animationState -> animationState.setAndContinue(SPIN))});
+   }
+
+   public AnimatableInstanceCache getAnimatableInstanceCache() {
+      return this.cache;
+   }
+}

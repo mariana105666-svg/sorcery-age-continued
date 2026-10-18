@@ -1,0 +1,75 @@
+package radon.jujutsu_kaisen.ability.misc;
+
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec2;
+import org.jetbrains.annotations.Nullable;
+import radon.jujutsu_kaisen.ability.JJKAbilities;
+import radon.jujutsu_kaisen.ability.base.Ability;
+import radon.jujutsu_kaisen.capability.data.sorcerer.ISorcererData;
+import radon.jujutsu_kaisen.capability.data.sorcerer.SorcererDataHandler;
+import radon.jujutsu_kaisen.config.ConfigHolder;
+
+public class RCT3 extends RCT2 {
+   @Override
+   public boolean shouldTrigger(PathfinderMob owner, @Nullable LivingEntity target) {
+      ISorcererData cap = (ISorcererData)owner.getCapability(SorcererDataHandler.INSTANCE).resolve().orElseThrow();
+      return cap.getBurnout() > 0 ? true : super.shouldTrigger(owner, target);
+   }
+
+   @Override
+   public void run(LivingEntity owner) {
+      super.run(owner);
+      ISorcererData cap = (ISorcererData)owner.getCapability(SorcererDataHandler.INSTANCE).resolve().orElseThrow();
+      int burnout = cap.getBurnout();
+      if (burnout > 0 && (owner.isShiftKeyDown() || !(owner instanceof Player))) {
+         cap.setBurnout(Math.max(0, burnout - 5));
+         if (this.getCharge(owner) % 20 == 0) {
+            cap.increaseBrainDamage();
+         }
+      }
+   }
+
+   @Override
+   public boolean usesHands() {
+      return false;
+   }
+
+   @Override
+   public float healMult() {
+      return 2.25F;
+   }
+
+   @Override
+   public float getCost(LivingEntity owner) {
+      float cost = super.getCost(owner);
+      ISorcererData cap = (ISorcererData)owner.getCapability(SorcererDataHandler.INSTANCE).resolve().orElseThrow();
+      if (cap.getBurnout() > 0 && owner.isShiftKeyDown()) {
+         cost += 5.0F;
+      }
+
+      return cost;
+   }
+
+   @Nullable
+   @Override
+   public Ability getParent(LivingEntity owner) {
+      return (Ability)JJKAbilities.RCT2.get();
+   }
+
+   @Override
+   public Vec2 getDisplayCoordinates() {
+      return new Vec2(4.0F, 2.0F);
+   }
+
+   @Override
+   public int getPointsCost() {
+      return (Integer)ConfigHolder.SERVER.rct3Cost.get();
+   }
+
+   @Override
+   protected float getMultiplier() {
+      return 8.5F;
+   }
+}
